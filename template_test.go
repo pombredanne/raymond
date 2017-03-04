@@ -27,7 +27,7 @@ CONTENT[ '
 func TestNewTemplate(t *testing.T) {
 	t.Parallel()
 
-	tpl := newTemplate(sourceBasic)
+	tpl := newTemplate(sourceBasic, false)
 	if tpl.source != sourceBasic {
 		t.Errorf("Failed to instantiate template")
 	}

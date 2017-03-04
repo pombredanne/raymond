@@ -231,6 +231,10 @@ func (options *Options) FnData(data *DataFrame) string {
 // Inverse evaluates "else block".
 func (options *Options) Inverse() string {
 	result := ""
+	if options == nil {
+		return result
+	}
+
 	if block := options.eval.curBlock(); (block != nil) && (block.Inverse != nil) {
 		result, _ = block.Inverse.Accept(options.eval).(string)
 	}
@@ -372,7 +376,7 @@ func lookupHelper(obj interface{}, field string, options *Options) interface{} {
 }
 
 // #equal helper
-// Ref: https://github.com/aymerick/raymond/issues/7
+// Ref: https://github.com/komand/raymond/issues/7
 func equalHelper(a interface{}, b interface{}, options *Options) interface{} {
 	if Str(a) == Str(b) {
 		return options.Fn()

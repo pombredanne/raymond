@@ -7,9 +7,10 @@ import (
 
 // partial represents a partial template
 type partial struct {
-	name   string
-	source string
-	tpl    *Template
+	name      string
+	source    string
+	tpl       *Template
+	unescaped bool
 }
 
 // partials stores all global partials
@@ -25,14 +26,15 @@ func init() {
 // newPartial instanciates a new partial
 func newPartial(name string, source string, tpl *Template) *partial {
 	return &partial{
-		name:   name,
-		source: source,
-		tpl:    tpl,
+		name:      name,
+		source:    source,
+		tpl:       tpl,
+		unescaped: tpl.unescaped,
 	}
 }
 
 // RegisterPartial registers a global partial. That partial will be available to all templates.
-func RegisterPartial(name string, source string) {
+func RegisterPartial(name string, source string, unescaped bool) {
 	partialsMutex.Lock()
 	defer partialsMutex.Unlock()
 
@@ -41,12 +43,13 @@ func RegisterPartial(name string, source string) {
 	}
 
 	partials[name] = newPartial(name, source, nil)
+	partials[name].unescaped = unescaped
 }
 
 // RegisterPartials registers several global partials. Those partials will be available to all templates.
-func RegisterPartials(partials map[string]string) {
+func RegisterPartials(partials map[string]string, unescaped bool) {
 	for name, p := range partials {
-		RegisterPartial(name, p)
+		RegisterPartial(name, p, unescaped)
 	}
 }
 
@@ -75,7 +78,7 @@ func (p *partial) template() (*Template, error) {
 	if p.tpl == nil {
 		var err error
 
-		p.tpl, err = Parse(p.source)
+		p.tpl, err = ParseTemplate(p.source, p.unescaped)
 		if err != nil {
 			return nil, err
 		}

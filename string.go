@@ -1,6 +1,7 @@
 package raymond
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -36,10 +37,12 @@ func strValue(value reflect.Value) string {
 	val := reflect.ValueOf(ival)
 
 	switch val.Kind() {
+	case reflect.Map:
+		b, _ := json.Marshal(ival)
+		result += string(b)
 	case reflect.Array, reflect.Slice:
-		for i := 0; i < val.Len(); i++ {
-			result += strValue(val.Index(i))
-		}
+		b, _ := json.Marshal(ival)
+		result += string(b)
 	case reflect.Bool:
 		result = "false"
 		if val.Bool() {

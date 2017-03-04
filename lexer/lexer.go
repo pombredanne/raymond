@@ -43,6 +43,8 @@ type Lexer struct {
 	// the shameful contextual properties needed because `nextFunc` is not enough
 	closeComment *regexp.Regexp // regexp to scan close of current comment
 	rawBlock     bool           // are we parsing a raw block content ?
+
+	idAllowSpaces bool
 }
 
 var (
@@ -50,10 +52,14 @@ var (
 	literalLookheadChars = `[\s` + regexp.QuoteMeta("~})") + `]`
 
 	// characters not allowed in an identifier
-	unallowedIDChars = " \n\t!\"#%&'()*+,./;<=>@[\\]^`{|}~"
+	unallowedIDChars            = " \n\t!\"#%&'()*+,./;<=>@[\\]^`{|}~"
+	unallowedIDCharsAllowSpaces = "\n\t!\"#%&'()*+,./;<=>@[\\]^`{|}~"
 
 	// regular expressions
-	rID                  = regexp.MustCompile(`^[^` + regexp.QuoteMeta(unallowedIDChars) + `]+`)
+	rID = regexp.MustCompile(`^[^` + regexp.QuoteMeta(unallowedIDChars) + `]+`)
+
+	rIDAllowSpaces = regexp.MustCompile(`^[^` + regexp.QuoteMeta(unallowedIDCharsAllowSpaces) + `]+`)
+
 	rDotID               = regexp.MustCompile(`^\.` + lookheadChars)
 	rTrue                = regexp.MustCompile(`^true` + literalLookheadChars)
 	rFalse               = regexp.MustCompile(`^false` + literalLookheadChars)
@@ -66,6 +72,7 @@ var (
 	rOpenBlock           = regexp.MustCompile(`^\{\{~?#`)
 	rOpenEndBlock        = regexp.MustCompile(`^\{\{~?/`)
 	rOpenPartial         = regexp.MustCompile(`^\{\{~?>`)
+	rOpenFunc            = regexp.MustCompile(`^\{\{~?$`)
 	// {{^}} or {{else}}
 	rInverse          = regexp.MustCompile(`^(\{\{~?\^\s*~?\}\}|\{\{~?\s*else\s*~?\}\})`)
 	rOpenInverse      = regexp.MustCompile(`^\{\{~?\^`)
@@ -356,8 +363,11 @@ func lexOpenMustache(l *Lexer) lexFunc {
 		tok = TokenOpenInverse
 	} else if str = l.findRegexp(rOpenInverseChain); str != "" {
 		tok = TokenOpenInverseChain
+	} else if str = l.findRegexp(rOpenFunc); str != "" {
+		tok = TokenOpenBlock
 	} else if str = l.findRegexp(rOpen); str != "" {
 		tok = TokenOpen
+		l.idAllowSpaces = true
 	} else {
 		// this is rotten
 		panic("Current pos MUST be an opening mustache")
@@ -387,7 +397,7 @@ func lexCloseMustache(l *Lexer) lexFunc {
 		// this is rotten
 		panic("Current pos MUST be a closing mustache")
 	}
-
+	l.idAllowSpaces = false
 	l.pos += len(str)
 	l.emit(tok)
 
@@ -464,7 +474,10 @@ func lexExpression(l *Lexer) lexFunc {
 		return lexNumber
 	case r == '[':
 		return lexPathLiteral
-	case strings.IndexRune(unallowedIDChars, r) < 0:
+	case l.idAllowSpaces && strings.IndexRune(unallowedIDCharsAllowSpaces, r) < 0:
+		l.backup()
+		return lexIdentifier
+	case !l.idAllowSpaces && strings.IndexRune(unallowedIDChars, r) < 0:
 		l.backup()
 		return lexIdentifier
 	default:
@@ -596,12 +609,20 @@ func (l *Lexer) scanNumber() bool {
 
 // lexIdentifier scans an ID
 func lexIdentifier(l *Lexer) lexFunc {
-	str := l.findRegexp(rID)
+	idToUse := rID
+
+	if l.idAllowSpaces {
+		idToUse = rIDAllowSpaces
+		l.idAllowSpaces = false
+	}
+
+	str := l.findRegexp(idToUse)
 	if len(str) == 0 {
 		// this is rotten
 		panic("Identifier expected")
 	}
 
+	l.idAllowSpaces = false
 	l.pos += len(str)
 	l.emit(TokenID)
 

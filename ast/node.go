@@ -4,6 +4,7 @@ package ast
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 // References:
@@ -407,11 +408,11 @@ func (node *Expression) HelperName() string {
 		return ""
 	}
 
-	if path.Data || (len(path.Parts) != 1) || (path.Depth > 0) || path.Scoped {
+	if path.Data || (path.Depth > 0) || path.Scoped {
 		return ""
 	}
 
-	return path.Parts[0]
+	return strings.Join(path.Parts, ".")
 }
 
 // FieldPath returns path expression representing a field path, or nil if this is not a field path.

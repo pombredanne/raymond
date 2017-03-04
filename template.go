@@ -7,31 +7,57 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/aymerick/raymond/ast"
-	"github.com/aymerick/raymond/parser"
+	"github.com/komand/raymond/ast"
+	"github.com/komand/raymond/parser"
 )
 
 // Template represents a handlebars template.
 type Template struct {
-	source   string
-	program  *ast.Program
-	helpers  map[string]reflect.Value
-	partials map[string]*partial
-	mutex    sync.RWMutex // protects helpers and partials
+	source    string
+	program   *ast.Program
+	helpers   map[string]reflect.Value
+	partials  map[string]*partial
+	mutex     sync.RWMutex // protects helpers and partials
+	unescaped bool
 }
 
 // newTemplate instanciate a new template without parsing it
-func newTemplate(source string) *Template {
+func newTemplate(source string, unescaped bool) *Template {
 	return &Template{
-		source:   source,
-		helpers:  make(map[string]reflect.Value),
-		partials: make(map[string]*partial),
+		source:    source,
+		helpers:   make(map[string]reflect.Value),
+		partials:  make(map[string]*partial),
+		unescaped: unescaped,
 	}
 }
 
 // Parse instanciates a template by parsing given source.
+func ParseUnescaped(source string) (*Template, error) {
+	tpl := newTemplate(source, true)
+
+	// parse template
+	if err := tpl.parse(); err != nil {
+		return nil, err
+	}
+
+	return tpl, nil
+}
+
+// ParseTemplate instanciates a template by parsing given source.
+func ParseTemplate(source string, unescaped bool) (*Template, error) {
+	tpl := newTemplate(source, unescaped)
+
+	// parse template
+	if err := tpl.parse(); err != nil {
+		return nil, err
+	}
+
+	return tpl, nil
+}
+
+// Parse instanciates a template by parsing given source.
 func Parse(source string) (*Template, error) {
-	tpl := newTemplate(source)
+	tpl := newTemplate(source, false)
 
 	// parse template
 	if err := tpl.parse(); err != nil {
@@ -42,12 +68,17 @@ func Parse(source string) (*Template, error) {
 }
 
 // MustParse instanciates a template by parsing given source. It panics on error.
-func MustParse(source string) *Template {
-	result, err := Parse(source)
+func MustParseTemplate(source string, unescaped bool) *Template {
+	result, err := ParseTemplate(source, unescaped)
 	if err != nil {
 		panic(err)
 	}
 	return result
+}
+
+// MustParse instanciates a template by parsing given source. It panics on error.
+func MustParse(source string) *Template {
+	return MustParseTemplate(source, false)
 }
 
 // ParseFile reads given file and returns parsed template.
@@ -57,7 +88,7 @@ func ParseFile(filePath string) (*Template, error) {
 		return nil, err
 	}
 
-	return Parse(string(b))
+	return ParseTemplate(string(b), false)
 }
 
 // parse parses the template
@@ -67,7 +98,7 @@ func (tpl *Template) parse() error {
 	if tpl.program == nil {
 		var err error
 
-		tpl.program, err = parser.Parse(tpl.source)
+		tpl.program, err = parser.Parse(tpl.source, tpl.unescaped)
 		if err != nil {
 			return err
 		}
@@ -78,7 +109,7 @@ func (tpl *Template) parse() error {
 
 // Clone returns a copy of that template.
 func (tpl *Template) Clone() *Template {
-	result := newTemplate(tpl.source)
+	result := newTemplate(tpl.source, tpl.unescaped)
 
 	result.program = tpl.program
 
@@ -245,4 +276,48 @@ func (tpl *Template) PrintAST() string {
 	}
 
 	return ast.Print(tpl.program)
+}
+
+// Print returns string representation of parsed template.
+func (tpl *Template) Print() string {
+	// XXX
+	return ast.PrintOriginal(tpl.program)
+}
+
+// Validate
+func (tpl *Template) Validate(variables map[string]struct{}) (err error) {
+	// parses template if necessary
+	err = tpl.parse()
+	if err != nil {
+		return fmt.Errorf("Template could not be parsed: %s", err)
+	}
+
+	// setup visitor
+	v := newValidateVisitor(tpl, variables)
+
+	// visit AST
+	err, _ = tpl.program.Accept(v).(error)
+
+	// named return values
+	return err
+}
+
+// Rename
+func (tpl *Template) Rename(variables map[string]string) (err error) {
+	// parses template if necessary
+	err = tpl.parse()
+	if err != nil {
+		return fmt.Errorf("Template could not be parsed: %s", err)
+	}
+
+	defer errRecover(&err)
+
+	// setup visitor
+	v := newRenameVisitor(tpl, variables)
+
+	// visit AST
+	err, _ = tpl.program.Accept(v).(error)
+
+	// named return values
+	return err
 }

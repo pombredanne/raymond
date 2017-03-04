@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/aymerick/raymond/ast"
-	"github.com/aymerick/raymond/lexer"
+	"github.com/komand/raymond/ast"
+	"github.com/komand/raymond/lexer"
 )
 
 // References:
@@ -28,6 +28,8 @@ type parser struct {
 
 	// All tokens have been retreieved from lexer
 	lexOver bool
+
+	unescaped bool
 }
 
 var (
@@ -37,18 +39,19 @@ var (
 )
 
 // new instanciates a new parser
-func new(input string) *parser {
+func new(input string, unescaped bool) *parser {
 	return &parser{
-		lex: lexer.Scan(input),
+		lex:       lexer.Scan(input),
+		unescaped: unescaped,
 	}
 }
 
 // Parse analyzes given input and returns the AST root node.
-func Parse(input string) (result *ast.Program, err error) {
+func Parse(input string, unescaped bool) (result *ast.Program, err error) {
 	// recover error
 	defer errRecover(&err)
 
-	parser := new(input)
+	parser := new(input, unescaped)
 
 	// parse
 	result = parser.parseProgram()
@@ -473,7 +476,7 @@ func (p *parser) parseMustache() *ast.MustacheStatement {
 	}
 
 	unescaped := false
-	if (tok.Kind == lexer.TokenOpenUnescaped) || (rOpenAmp.MatchString(tok.Val)) {
+	if p.unescaped || ((tok.Kind == lexer.TokenOpenUnescaped) || (rOpenAmp.MatchString(tok.Val))) {
 		unescaped = true
 	}
 
